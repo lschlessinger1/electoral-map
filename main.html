@@ -1,0 +1,440 @@
+<!-- inspired by solution to Studio 5 posted Prof. Ottley. DOA: 3/1/18 -->
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>Electoral Map</title>
+        <script src="https://d3js.org/d3.v4.js"></script>
+        <script src="https://d3js.org/d3-queue.v3.min.js"></script>
+        <style>
+            h1, h2 {
+                text-align: center;
+            }
+
+            div.tooltip {
+                font: 0.7em sans-serif; 
+                color: gray;  
+                position: absolute;         
+                /*text-align: center;         */
+                width: 150px;                    
+                height: 100px;                   
+                padding: 2px;                      
+                border: 1px solid "#808080"; 
+                border-radius: 7px;  
+                pointer-events: none;   
+
+            }
+
+            svg {
+                margin: 0 auto;
+                display: block;
+            }
+        </style>
+    </head>
+    <body>
+    	<h1>Electoral Map</h1>
+        <section>
+            <h2>US Presidential Elections From 1940 to 2016</h2>
+        </section>
+
+        <script type="text/javascript">
+            var filePrefix = "election-results-";
+            var dataFolder = "data/";
+            var winnersFileName = "yearwise-winner.csv";
+
+            // define grid variables
+            var margin = { 
+            	top: 10,
+            	right: 10,
+            	bottom: 10,
+            	left: 10
+            };
+
+            var padding = {
+            	top: 10,
+            	right: 10,
+            	bottom: 10,
+            	left: 10
+            };
+            var gridPad = 125;
+
+            var width = 1200 - margin.left - margin.right - padding.left - padding.right ;
+            var height = 600 - margin.top - margin.bottom - padding.top - padding.bottom + gridPad;
+
+            var numRows = 8;
+            var numCols = 12;
+
+            var year = "2012";
+
+            // map from state to x,y
+            var cellMap = {
+                MN: [5, 2],
+                WI: [7, 2],
+                MI: [8, 2],
+                IL: [6, 2],
+                IA: [5, 3],
+                ME: [numCols-1, 0],
+                VT: [numCols-2, 1],
+                NY: [numCols-3, 2],
+                RI: [numCols-2, 2],
+                MA: [numCols-1, 2],
+                PA: [8,3],
+                NJ: [9,3],
+                CT: [numCols-2, 3],
+                DC: [numCols-2, 4],
+                DE: [numCols-3, 5],
+                MD: [numCols-3, 4],
+                WA: [1, 2],
+                OR: [1, 3],
+                CA: [1, 4],
+                NM: [3, 5],
+                HI: [1, 7],
+                OH: [7,3],
+                MO: [5,4],
+                ND: [4, 2],
+                SD: [4, 3],
+                IN: [6,3],
+                NE: [4,4],
+                KS: [4,5],
+                NH: [numCols-1, 1],
+                KY: [6,4],
+                WV: [7,4],
+                AR: [5,5],
+                TN: [6,5],
+                LA: [5,6],
+                FL: [numCols-3, numRows-1],
+                VA: [8,4],
+                NC: [7,5],
+                SC: [8,5],
+                OK: [4,6],
+                MS: [6,6],
+                AL: [7,6],
+                GA: [8,6],
+                TX: [4,7],
+                NV: [2,3],
+                AZ: [2,5],
+                AK: [0,0],
+                MT: [3,2],
+                ID: [2,2],
+                WY: [3,3],
+                CO: [3,4],
+                UT: [2,4]
+            };
+
+            var democratBlue = "#336699";
+            var republicanRed = "#E91D0E";
+            var lightBlue = "#89CFF0";
+            var lightRed = "#FFCCCB";
+            // define scales
+            var gridXScale = d3.scaleLinear()
+                .range([margin.left + padding.left, width])
+                .domain([0, numCols]);
+
+            var gridYScale = d3.scaleLinear()
+                .range([margin.top + padding.top + gridPad, height])
+                .domain([0, numRows]);
+
+            var timelineXScale = d3.scaleLinear()
+                .range([margin.left + padding.left, width - margin.left - margin.right - padding.left - padding.right])
+                .domain([19, 0]); 
+
+            var colorScale = d3.scaleLinear()
+                .domain([-100, -1, 1, 100]) // (2016 mod 1940) / 4 = 19
+                .range([democratBlue, lightBlue, lightRed, republicanRed]);
+                // .interpolate(d3.interpolateCubehelix);
+
+            var numColorRects = 12;
+            var legendScale = d3.scaleLinear()
+                .range([margin.left + padding.left + width/8, width - width/8])
+                .domain([0, numColorRects]);
+
+            var legendColorScale = d3.scaleLinear()
+                .range([-100, 100])
+                .domain([0, numColorRects]);
+
+
+            // create invisible tooltip
+            var tooltip = d3.select("body")
+                .append("div")
+                .style("background", "#E0E0E0")
+                .style("opacity", 0)
+                .attr("class", "tooltip"); 
+
+            // define canvas SVG
+            var canvas = d3.select("body")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            // create grid
+            var gridData = [];
+            var i = 0;
+            for (var col = 0; col < numCols; col++) {
+                for (var row = 0; row < numRows; row++) {
+                    gridData[i] = {
+                        x: col,
+                        y: row,
+                        id: i,
+                        data: null
+                    };
+                    i++;
+                }
+            }
+
+            function getGridPos(x, y) {
+                var i = 0;
+                for (var col = 0; col < numCols; col++) {
+                    for (var row = 0; row < numRows; row++) {
+                        if (x == col && row == y){
+                            return i;
+                        }
+                        i++;
+                    }
+                }
+            }
+
+            // Timeline
+            d3.csv(dataFolder + winnersFileName, function(data) {
+                // create timeline
+                // add dashed lines between all circles except last
+                canvas
+                    .append("line") 
+                    // .attr("stroke-width", "9px")
+                    .style("stroke", "black")
+                    .attr("x1", timelineXScale(0))
+                    .attr("x2", timelineXScale(19))
+                    .attr("y1", margin.top + padding.top)
+                    .attr("y2", margin.top + padding.top)
+                    .attr("stroke", "#C0C0C0")
+                    .attr("stroke-dasharray", "2,2");
+
+                var circle = canvas.selectAll("circle")
+                    .data(data)
+                    .enter()
+                    .append("circle")
+                    .attr("id", function(d) {
+                        return d.YEAR;
+                    })
+                    .attr("cx", function(d) { 
+                        return timelineXScale((2016 % d.YEAR) / 4);
+                    })
+                    .attr("cy", function(d) {
+                        return margin.top + padding.top;
+                    })
+                    .attr("r", 10)
+                    .attr("fill", function(d) {
+                        return d.PARTY == "D" ? colorScale(-100) : colorScale(100);
+                    })
+                    .attr("stroke", function(d) {
+                        if (d.YEAR == year) {
+                            return "black";
+                        }
+                    })
+                    .attr("stroke-width", function(d) {
+                        if (d.YEAR == year) {
+                            return 3;
+                        }
+                    })
+                    .attr("class", "timelineCircle")
+                    .on("click", function(d) {
+                        year = d.YEAR;
+                        circle.style("stroke", function(o) {
+                            return o.YEAR == year ? "black" : "white";
+                        });
+                        circle.style("stroke-width", function(o) {
+                            return o.YEAR == year ? 3 : 1;
+                        });
+                        populateGrid(year);
+                    });
+
+                var timelineLabels = canvas.selectAll("circle.timelineCircle text")
+                    .data(data)
+                    .enter()
+                    .append("text");
+
+                timelineLabels
+                    .attr("x", function(d) { 
+                        return timelineXScale((2016 % d.YEAR) / 4);
+                    })
+                    .attr("y", function(d) {
+                        return margin.top + padding.top + 10*3;
+                    })
+                    .text(function (d) {
+                        return d.YEAR;
+                    })
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "#434343")
+                    .attr("font-family", "serif");
+
+                populateGrid(year);
+
+                function populateGrid(yr) {
+                    d3.selectAll(".grid").remove();
+                    d3.csv(dataFolder + filePrefix + yr + ".csv", function(dataset) {
+                        dataset.forEach(function(d) {
+                            var abbrev = d.Abbreviation;
+                            var coords = cellMap[abbrev];
+                            var x = coords[0];
+                            var y = coords[1];
+                            gridData[getGridPos(x, y)].data = d;  
+                        });
+                        console.log("populating gridData for the " + yr + " election")
+                        var legendRects = canvas.selectAll("rect")
+                            .data(d3.range(numColorRects))
+                            .enter()
+                            .append("rect");
+
+                        var legendRectWidth = 60;
+                        legendRects.attr("y", margin.top + padding.top + 50)
+                            .attr("height", 10)
+                            .attr("x", function(d, i) {
+                                return legendScale(i);    
+                            })
+                            .attr("class", "legendRects")   
+                            .attr("width", legendRectWidth)
+                            .attr("fill", function(d, i) {
+                                // map i to -100, 100
+                                var val = legendColorScale(i + 1);
+                                return colorScale(val);
+                            });
+
+                        var legendLabels = canvas.selectAll("legendRects")
+                            .data(d3.range(numColorRects))
+                            .enter()
+                            .append("text");
+
+                        legendLabels
+                            .attr("x", function(d, i) { 
+                                return legendScale(i) + legendRectWidth/2;
+                            })
+                            .attr("y", function(d) {
+                                return margin.top + padding.top + 50 + 20;
+                            })
+                            .text(function (d) {
+                                var f = d3.format(".1f");
+                                var lower = legendColorScale(d);
+                                var upper = legendColorScale(d+1);
+                                return f(lower) + " to " + f(upper);
+                            })
+                            .attr("text-anchor", "middle")
+                            .attr("fill", "#434343")
+                            .attr("font-size", "0.6em")
+                            .attr("font-family", "serif");
+
+                        var gridSpacing = 10;
+                        var gridRects =  canvas.selectAll("rect.gridRect")
+                            .data(gridData)
+                            .enter()
+                            .append("rect");
+
+                        // grid
+                        var gridRectWidth = width/numCols - gridSpacing/2;
+                        var gridRectHeight =  height/numRows - 2*gridSpacing;
+                        gridRects
+                            .attr("id", function(d){
+                                return "grid_" + d.x.toString() + "_" + d.y.toString();
+                            })
+                            .attr("class", "gridElement")
+                            .attr("x", function(d){
+                                return gridXScale(Math.floor(d.id / numRows));
+                            })
+                            .attr("y", function(d){
+                                return gridYScale(d.id % numRows);
+                            })
+                            .attr("class", "gridRect grid")
+                            .attr("width", gridRectWidth)
+                            .attr("height", gridRectHeight)
+                            .attr("fill", function (d) {
+                                if (d.data == null) {
+                                    return "white";
+                                } else {
+                                    var color = colorScale(d.data.R_Percentage - d.data.D_Percentage);
+                                    return color;
+                                }
+                            })
+                            .on("mouseover", function(d) {
+                                // hovering <!-- inspired by solution to Studio 5 posted Prof. Ottley. DOA: 3/1/18 -->
+                                if (d.data != null) {
+                                    var democratWon = d.data.R_Percentage < d.data.D_Percentage;
+                                    var stateColor = democratWon ? democratBlue : republicanRed;
+                                    var demName = d.data.D_Nominee.toLowerCase();
+                                    var repName = d.data.R_Nominee.toLowerCase();
+                                    var ul = tooltip 
+                                        .style("left", (d3.event.pageX - gridRectWidth/2) + "px")     
+                                        .style("top",  (d3.event.pageY - gridRectHeight/2) + "px")
+                                        .style("opacity", .9);
+                                        tooltip.append("p")
+                                          .text(d.data.State)
+                                          .style("color", stateColor);
+                                        tooltip.append("p")
+                                          .text("Electoral Votes: " + d.data.Total_EV)
+                                          .style("color", "black");
+                                        tooltip.append("ul");
+                                    ul.append("li")
+                                        .text(demName + ": " + d.data.D_Votes + " (" + d.data.D_Percentage + "%)")
+                                        .style("color", democratBlue)
+                                        .style("font-size", "0.7em")
+                                        .style("text-transform", "capitalize");
+                                    ul.append("li")
+                                        .text(repName + ": " + d.data.R_Votes + " (" + d.data.R_Percentage + "%)")
+                                        .style("color", republicanRed)
+                                        .style("font-size", "0.7em")
+                                        .style("text-transform", "capitalize");
+                                } else {
+                                    tooltip
+                                        .style("opacity", 0).html("");  
+                                }
+                            })                  
+                            .on("mouseout", function(d) {
+                                tooltip.style("opacity", 0).html("");    
+                            });
+          
+                        canvas.selectAll(".gridData")
+                            .data(gridData)
+                            .enter()
+                            .append("text")
+                            .text(function(d) {
+                                if (d.data == null) {
+                                    return "";
+                                } else {
+                                    return d.data.Abbreviation;
+                                }
+                            })
+                            .attr("x", function(d) {
+                                return gridXScale(d.x) + gridRectWidth/2;
+                            })
+                            .attr("y", function(d) {
+                                return gridYScale(d.y) + gridRectHeight/2;
+                            })
+                            .attr("text-anchor", "middle")
+                            .attr("fill", "#434343")
+                            .attr("class", "grid")
+                            .attr("font-family", "sans-serif");
+
+                        canvas.selectAll(".gridData")
+                            .data(gridData)
+                            .enter()
+                            .append("text")
+                            .text(function(d) {
+                                if (d.data == null) {
+                                    return "";
+                                } else {
+                                    return d.data.Total_EV;
+                                }
+                            })
+                            .attr("x", function(d) {
+                                return gridXScale(d.x) + gridRectWidth/2;
+                            })
+                            .attr("y", function(d) {
+                                return gridYScale(d.y) + 1.5*(gridRectHeight/2);
+                            })
+                            .attr("text-anchor", "middle")
+                            .attr("font-size", "0.85em")
+                            .attr("fill", "#434343")
+                            .attr("font-family", "sans-serif");
+                    });
+                }
+            });
+		</script>
+    </body>
+</html>
