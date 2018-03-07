@@ -329,7 +329,7 @@
                         var names = presidentElect.split(" ");
                         var folderName = "presidents/";
                         var presFileName = "";
-                        console.log(presidentElect)
+  
                         if (names.length == 2) {
                             // first-last
                             var first = names[0].toLowerCase();
@@ -343,7 +343,7 @@
                             presFileName =  first + "-" + middle + "-" + last;
                         }
                         presFileName += ".jpeg";
-                        console.log(presFileName);
+
                         d3.select("#presImg")
                             .attr("src", dataFolder + folderName + presFileName)
                             .attr("border-width", "3px")
