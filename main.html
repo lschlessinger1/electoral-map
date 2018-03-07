@@ -24,8 +24,12 @@
             }
 
             svg {
-
                 display: block;
+            }
+
+            .col {
+                padding: 20px;
+                float: left;
             }
 
         </style>
@@ -35,7 +39,18 @@
         <section>
             <h2>US Presidential Elections From 1940 to 2016</h2>
         </section>
+        <section>
+            <section id="canvas" class="col">
+                
+            </section>
+            <section id="winner-img" class="col" >
+                <h2>President-Elect</h2>
+                <img id="presImg">
+                    
+                </img>
 
+            </section>
+        </section>
         <script type="text/javascript">
             var filePrefix = "election-results-";
             var dataFolder = "data/";
@@ -166,7 +181,7 @@
                 .attr("class", "tooltip"); 
 
             // define canvas SVG
-            var canvas = d3.select("body")
+            var canvas = d3.select("body #canvas")
                 .append("svg")
                 .attr("width", width)
                 .attr("height", height);
@@ -298,7 +313,43 @@
                             gridData[getGridPos(x, y)].data = null;  
                         });
 
-                        console.log("populating gridData for the " + yr + " election")
+                        console.log("populating gridData for the " + yr + " election");
+
+                        // add image of president-elect
+                        
+                        // determine winner of election
+                        var democratsWon = false;
+                        data.forEach(function(d) {
+                            if (d.YEAR == yr) {
+                                democratsWon = d.PARTY == "D";
+                            }
+                        });
+                        var presidentElect = democratsWon ? dataset[0].D_Nominee : dataset[0].R_Nominee;
+                        presidentElect = presidentElect.replace(/[^\x00-\x7F]/g, "");
+                        var names = presidentElect.split(" ");
+                        var folderName = "presidents/";
+                        var presFileName = "";
+                        console.log(presidentElect)
+                        if (names.length == 2) {
+                            // first-last
+                            var first = names[0].toLowerCase();
+                            var last = names[1].toLowerCase();
+                            presFileName = first + "-" + last;
+                        } else if (names.length == 3) {
+                            // first-[middle initial]-last
+                            var first = names[0].toLowerCase();
+                            var middle = names[1].replace(".", "").toLowerCase();
+                            var last = names[2].toLowerCase();
+                            presFileName =  first + "-" + middle + "-" + last;
+                        }
+                        presFileName += ".jpeg";
+                        console.log(presFileName);
+                        d3.select("#presImg")
+                            .attr("src", dataFolder + folderName + presFileName)
+                            .attr("border-width", "3px")
+                            .attr("border-style", "solid")
+                            .attr("border-color", democratsWon ? democratBlue : republicanRed);
+
                         var legendRects = canvas.selectAll("rect")
                             .data(d3.range(numColorRects))
                             .enter()
