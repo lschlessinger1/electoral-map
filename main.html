@@ -11,7 +11,7 @@
                 text-align: center;
             }
 
-            div.tooltip {
+            .tooltip {
                 font: 0.7em sans-serif; 
                 color: gray;  
                 position: absolute;
@@ -24,9 +24,10 @@
             }
 
             svg {
-                margin: 0 auto;
+
                 display: block;
             }
+
         </style>
     </head>
     <body>
@@ -54,6 +55,7 @@
             	bottom: 10,
             	left: 10
             };
+
             var gridPad = 90;
 
             var width = 1200 - margin.left - margin.right - padding.left - padding.right ;
@@ -118,11 +120,16 @@
                 CO: [3,4],
                 UT: [2,4]
             };
+            var stateAbbrevs = [];
+            for (var key in cellMap) {
+                stateAbbrevs.push(key);
+            }
 
             var democratBlue = "#336699";
             var republicanRed = "#E91D0E";
             var lightBlue = "#89CFF0";
             var lightRed = "#FFCCCB";
+
             // define scales
             var gridXScale = d3.scaleLinear()
                 .range([margin.left + padding.left, width])
@@ -142,6 +149,7 @@
                 // .interpolate(d3.interpolateCubehelix);
 
             var numColorRects = 12;
+
             var legendScale = d3.scaleLinear()
                 .range([margin.left + padding.left + width/8, width - width/8])
                 .domain([0, numColorRects]);
@@ -149,7 +157,6 @@
             var legendColorScale = d3.scaleLinear()
                 .range([-100, 100])
                 .domain([0, numColorRects]);
-
 
             // create invisible tooltip
             var tooltip = d3.select("body")
@@ -204,7 +211,7 @@
                     .attr("y1", margin.top + padding.top)
                     .attr("y2", margin.top + padding.top)
                     .attr("stroke", "#C0C0C0")
-                    .attr("stroke-dasharray", "2,2");
+                    .attr("stroke-dasharray", "2, 2");
 
                 var circle = canvas.selectAll("circle")
                     .data(data)
@@ -269,13 +276,28 @@
                 function populateGrid(yr) {
                     d3.selectAll(".grid").remove();
                     d3.csv(dataFolder + filePrefix + yr + ".csv", function(dataset) {
+                        var abbrevCopy = stateAbbrevs;
+                        var abbrevsUsed = []
                         dataset.forEach(function(d) {
                             var abbrev = d.Abbreviation;
+                            if (abbrev != "") {
+                                abbrevsUsed.push(abbrev);
+                                var coords = cellMap[abbrev];
+                                var x = coords[0];
+                                var y = coords[1];
+                                gridData[getGridPos(x, y)].data = d;  
+                            }
+                        });
+
+                        var dif = abbrevCopy.filter(abbrev => abbrevsUsed.indexOf(abbrev) <  0);
+                        dif.forEach(function(d) {
+                            var abbrev = d;
                             var coords = cellMap[abbrev];
                             var x = coords[0];
                             var y = coords[1];
-                            gridData[getGridPos(x, y)].data = d;  
+                            gridData[getGridPos(x, y)].data = null;  
                         });
+
                         console.log("populating gridData for the " + yr + " election")
                         var legendRects = canvas.selectAll("rect")
                             .data(d3.range(numColorRects))
@@ -379,8 +401,7 @@
                                         .style("font-size", "0.7em")
                                         .style("text-transform", "capitalize");
                                 } else {
-                                    tooltip
-                                        .style("opacity", 0).html("");  
+                                    tooltip.style("opacity", 0).html("");  
                                 }
                             })                  
                             .on("mouseout", function(d) {
